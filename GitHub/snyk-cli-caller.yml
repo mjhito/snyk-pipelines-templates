@@ -4,7 +4,7 @@ on: workflow_dispatch
 
 jobs:
   calling-workflow:
-    uses:mjhito/snyk-pipelines-templates/.github/workflows/snyk-cli-template.yml@main  # Specify your repo and branch
+    uses: mjhito/snyk-pipelines-templates/.github/workflows/snyk-cli-template.yml@main  # Specify your repo and branch
     with:
       flag: "--all-projects"
     secrets:
