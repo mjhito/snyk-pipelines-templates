@@ -1,0 +1,75 @@
+pipeline {
+    agent any
+
+    environment {
+        RUSTUP_HOME = "${HOME}/.rustup"
+        CARGO_HOME = "${HOME}/.cargo"
+        PATH = "${env.CARGO_HOME}/bin:${env.PATH}"
+        SNYK_TOKEN = credentials('SNYK_TOKEN')
+    }
+    
+    tools { nodejs "NodeJS16" }
+
+    stages {
+        stage('Clone Repository') {
+            steps {
+                git branch: 'main', url: 'https://github.com/mjhito/rust-vulnerable-apps.git'
+            }
+        }
+
+        stage('Install Rust via rustup') {
+            steps {
+                sh '''
+                    set +x
+                    if ! command -v cargo &> /dev/null; then
+                        echo "Installing Rust with rustup..."
+                        curl https://sh.rustup.rs -sSf | sh -s -- -y
+                        . "$HOME/.cargo/env"
+                    else
+                        echo "Rust already installed"
+                    fi
+
+                    rustc --version
+                    cargo --version
+                '''
+            }
+        }
+
+        stage('Install snyk CLI') {
+            steps {
+                sh 'npm install -g snyk'
+            }
+        }
+
+        stage('Authorize Snyk CLI') {
+            steps {
+                sh 'snyk auth ${SNYK_TOKEN}'
+            }
+        }
+
+        stage('Snyk Code') {
+            steps {
+                catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+                    sh 'snyk code test --file=Cargo.toml'
+                }
+            }
+        }
+        
+
+        stage('Archive Pre-Generated SBOM') {
+            steps {
+                echo 'Archiving rustsbom.json from repo root'
+                archiveArtifacts artifacts: 'rustspdx.json', fingerprint: true
+            }
+        }
+        
+        stage('scan sbom') {
+            steps {
+                catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+                    sh 'snyk sbom test --experimental --file=rustspdx.json'
+                }
+            }
+        }
+    }
+    
+}
