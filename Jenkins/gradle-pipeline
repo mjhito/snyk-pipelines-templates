@@ -1,0 +1,55 @@
+pipeline {
+    agent any
+
+    environment {
+        SNYK_TOKEN = credentials('SNYK_TOKEN')
+    }
+    
+    tools { 
+		nodejs "NodeJS16"
+		gradle "Gradle7"
+	 }
+
+    stages {
+        stage('Clone Repository') {
+            steps {
+                git branch: 'main', url: 'https://github.com/mjhito/demo-gradle-multi.git'
+            }
+        }
+
+        stage('Install snyk CLI') {
+            steps {
+                sh 'npm install -g snyk'
+                sh 'npm install snyk-to-html -g'
+            }
+        }
+
+        stage('Authorize Snyk CLI') {
+            steps {
+                sh 'snyk auth ${SNYK_TOKEN}'
+            }
+        }
+
+        stage('Snyk Open Source') {
+            steps {
+                catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+                    sh 'snyk test --all-sub-projects'
+                }
+            }
+        }
+        
+        stage('Snyk Code') {
+            steps {
+                catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+                    sh 'snyk code test --all-sub-projects --json | snyk-to-html -o ./gradle-results-code.html'
+                }
+            }
+        }
+    }
+    post {
+        always {
+            archiveArtifacts artifacts: '*.html'
+        }
+    }
+    
+}
